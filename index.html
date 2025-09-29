@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Big Heart with Many Falling Particles</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110.0/examples/js/loaders/FontLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110.0/examples/js/geometries/TextGeometry.js"></script>
+
+<script>
+// ===== Scene setup =====
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.set(0, 0, 80);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+// ===== Heart Particles =====
+const particleCount = 70000; 
+const particles = new THREE.Geometry();
+const colors = [];
+const targetPositions = [];
+const velocities = [];
+
+const palette = [
+  new THREE.Color(0xff66cc),
+  new THREE.Color(0xcc66ff),
+  new THREE.Color(0xff3399),
+  new THREE.Color(0x66ccff)
+];
+
+function heartShape(t) {
+    let x = 16 * Math.pow(Math.sin(t), 3);
+    let y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+    return {x, y};
+}
+
+for (let i = 0; i < particleCount; i++) {
+    let t = Math.random() * Math.PI * 2;
+    let {x, y} = heartShape(t);
+
+    x /= 1.5;
+    y /= 1.5;
+    let z = (Math.random() - 0.5) * 6.0;
+
+    targetPositions.push(new THREE.Vector3(x, y, z));
+    particles.vertices.push(new THREE.Vector3(0, 0, 0));
+
+    velocities.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 8
+    ));
+
+    let c = palette[Math.floor(Math.random() * palette.length)].clone();
+    colors.push(c);
+}
+
+particles.colors = colors;
+const particleMaterial = new THREE.PointsMaterial({ size: 0.05, vertexColors: THREE.VertexColors });
+const heart = new THREE.Points(particles, particleMaterial);
+scene.add(heart);
+
+// ===== Text Sentences on Circles =====
+const textGroup = new THREE.Group();
+scene.add(textGroup);
+
+const loader = new THREE.FontLoader();
+let floatingTexts = [];
+
+loader.load("https://threejs.org/examples/fonts/helvetiker_regular.typeface.json", function(font){
+    const sentences = [
+        " UOY EVOL ",
+        " HNA UEY AD IV NO MAC",
+        " TAHN AL ME",
+        " UEIHN ME UEY ES AUH HNA",
+        " IAM ME UEY"
+    ];
+
+    const radiusStart = 18; 
+    const radiusStep = 3.5;
+    const yStep = 3.5;
+    const repeatPerCircle = 6;
+
+    sentences.forEach((sentence, r) => {
+        const fullSentence = (sentence + "   ").repeat(repeatPerCircle);
+        const chars = fullSentence.split("");
+        const radius = radiusStart + r * radiusStep;
+        const y = -16 - r * yStep;
+
+        chars.forEach((char, i) => {
+            const geometry = new THREE.TextGeometry(char, {
+                font: font,
+                size: 1.2,
+                height: 0.05
+            });
+            const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const mesh = new THREE.Mesh(geometry, material);
+
+            let angle = (i / chars.length) * Math.PI * 2;
+            mesh.position.x = Math.cos(angle) * radius;
+            mesh.position.z = Math.sin(angle) * radius;
+            mesh.position.y = y;
+
+            mesh.lookAt(new THREE.Vector3(mesh.position.x * 2, mesh.position.y, mesh.position.z * 2));
+            textGroup.add(mesh);
+        });
+    });
+
+    for (let i = 0; i < 150; i++) { 
+        const geometry = new THREE.TextGeometry("ANH YEU EM", {
+            font: font,
+            size: 1.4,
+            height: 0.05
+        });
+        const material = new THREE.MeshBasicMaterial({ color: 0xff66cc });
+        const mesh = new THREE.Mesh(geometry, material);
+
+        mesh.position.x = (Math.random() - 0.5) * 160;
+        mesh.position.y = Math.random() * 120 + 50;
+        mesh.position.z = (Math.random() - 0.5) * 160;
+
+        mesh.userData.speed = 0.1 + Math.random() * 0.2;
+
+        scene.add(mesh);
+        floatingTexts.push(mesh);
+    }
+});
+
+// ===== Global Falling Particles (khắp màn hình) =====
+const screenCount = 9000;
+const screenGeometry = new THREE.Geometry();
+const screenVelocities = [];
+
+for (let i = 0; i < screenCount; i++) {
+    let x = (Math.random() - 0.5) * 200;
+    let y = Math.random() * 150;
+    let z = (Math.random() - 0.5) * 200;
+    screenGeometry.vertices.push(new THREE.Vector3(x, y, z));
+    screenVelocities.push(0.1 + Math.random() * 0.3);
+}
+
+const screenMaterial = new THREE.PointsMaterial({ color: 0x99ccff, size: 0.1 });
+const screenParticles = new THREE.Points(screenGeometry, screenMaterial);
+scene.add(screenParticles);
+
+// ===== Animate =====
+let explosionTime = 100;
+let gatherTime = 200;
+let frame = 0;
+
+function animate(){
+    requestAnimationFrame(animate);
+    frame++;
+
+    // Heart particles
+    for (let i = 0; i < particleCount; i++) {
+        let current = particles.vertices[i];
+        let target = targetPositions[i];
+
+        if (frame < explosionTime) {
+            current.add(velocities[i].clone().multiplyScalar(0.1));
+        } 
+        else if (frame < explosionTime + gatherTime) {
+            let progress = (frame - explosionTime) / gatherTime;
+            current.x += (target.x - current.x) * progress * 0.05;
+            current.y += (target.y - current.y) * progress * 0.05;
+            current.z += (target.z - current.z) * progress * 0.05;
+        } 
+        else {
+            current.x += (Math.random() - 0.5) * 0.002;
+            current.y += (Math.random() - 0.5) * 0.002;
+            current.z += (Math.random() - 0.5) * 0.002;
+            colors[i].offsetHSL(0.001, 0, 0);
+        }
+    }
+    particles.verticesNeedUpdate = true;
+    particles.colorsNeedUpdate = true;
+
+    // Screen particles
+    for (let i = 0; i < screenCount; i++) {
+        let p = screenGeometry.vertices[i];
+        p.y -= screenVelocities[i];
+        if (p.y < -80) {
+            p.y = 120;
+            p.x = (Math.random() - 0.5) * 200;
+            p.z = (Math.random() - 0.5) * 200;
+        }
+    }
+    screenGeometry.verticesNeedUpdate = true;
+
+    // Heart beat
+    let scale = 3.0 + 0.5 * Math.cos(frame * 0.15);
+    heart.scale.set(scale, scale, scale);
+
+    // Rotation
+    heart.rotation.y -= 0.001;
+    textGroup.rotation.y -= 0.001;
+
+    // Floating texts
+    floatingTexts.forEach(mesh => {
+        mesh.position.y -= mesh.userData.speed;
+        if (mesh.position.y < -80) {
+            mesh.position.y = 120;
+            mesh.position.x = (Math.random() - 0.5) * 160;
+            mesh.position.z = (Math.random() - 0.5) * 160;
+        }
+    });
+
+    renderer.render(scene, camera);
+}
+animate();
+
+// ===== Resize =====
+window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
+
+<body id="playBtn">
+    <audio id="audio" src="NHAC.mp3" preload="auto" playsinline></audio>
+
+    <script>
+        function playMusic() {
+            var audio = document.getElementById("audio");
+            audio.play().catch(function(err){
+                console.log("Không thể phát nhạc:", err);
+            });
+            // Sau khi phát nhạc thì bỏ listener để không bị gọi nhiều lần
+            document.body.removeEventListener("click", playMusic);
+            document.body.removeEventListener("touchstart", playMusic);
+        }
+
+        document.body.addEventListener("click", playMusic);
+        document.body.addEventListener("touchstart", playMusic);
+    </script>
+</body>
+
+
+
